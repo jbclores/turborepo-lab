@@ -1,0 +1,22 @@
+{
+  "name": "turborepo-lab",
+  "version": "1.0.0",
+  "description": "",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jbclores/turborepo-lab.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/jbclores/turborepo-lab/issues"
+  },
+  "homepage": "https://github.com/jbclores/turborepo-lab#readme"
+}
