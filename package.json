@@ -27,6 +27,7 @@
   },
   "homepage": "https://github.com/jbclores/turborepo-lab#readme",
   "devDependencies": {
-    "turbo": "^2.11.6"
+    "turbo": "^2.11.6",
+    "typescript": "^7.0.2"
   }
 }

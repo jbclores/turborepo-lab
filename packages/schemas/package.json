@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "build": "mkdir -p dist && echo built > dist/out.txt"
+    "build": "mkdir -p dist && echo built > dist/out.txt",
+    "typecheck": "tsc --noEmit"
   }
 }
