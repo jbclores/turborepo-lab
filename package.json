@@ -12,7 +12,8 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
-    "typecheck": "turbo run typecheck"
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test"
   },
   "repository": {
     "type": "git",
@@ -27,6 +28,10 @@
   },
   "homepage": "https://github.com/jbclores/turborepo-lab#readme",
   "devDependencies": {
+    "@jest/globals": "^30.5.2",
+    "@swc/core": "^1.16.13",
+    "@swc/jest": "^0.2.39",
+    "jest": "^30.5.2",
     "turbo": "^2.11.6",
     "typescript": "^7.0.2"
   }
