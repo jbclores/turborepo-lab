@@ -1,6 +1,6 @@
 import { healthResponseSchema } from '@lab/schemas'
 import { useQuery } from '@tanstack/react-query'
-import { apiGet } from './lib/api'
+import { apiGet } from './lib/client'
 
 export default function App() {
   const health = useQuery({
