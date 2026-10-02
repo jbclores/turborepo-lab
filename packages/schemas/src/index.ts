@@ -1,1 +1,1 @@
-export const greeting: string = "hello from @lab/schemas";
+export * from './health.js'
