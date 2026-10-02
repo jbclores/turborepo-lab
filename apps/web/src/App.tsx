@@ -1,12 +1,11 @@
+import { healthResponseSchema } from '@lab/schemas'
 import { useQuery } from '@tanstack/react-query'
 import { apiGet } from './lib/api'
-
-type Health = { status: string }
 
 export default function App() {
   const health = useQuery({
     queryKey: ['health'],
-    queryFn: ({ signal }) => apiGet<Health>('/api/health', signal),
+    queryFn: ({ signal }) => apiGet('/api/health', healthResponseSchema, signal),
   })
 
   return (
