@@ -1,5 +1,8 @@
 {
   "name": "@lab/schemas",
   "version": "0.0.0",
-  "private": true
+  "private": true,
+  "scripts": {
+    "build": "mkdir -p dist && echo built > dist/out.txt"
+  }
 }

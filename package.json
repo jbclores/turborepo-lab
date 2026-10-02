@@ -7,6 +7,13 @@
     "apps/*",
     "packages/*"
   ],
+  "packageManager": "npm@11.19.1",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jbclores/turborepo-lab.git"
@@ -18,5 +25,8 @@
   "bugs": {
     "url": "https://github.com/jbclores/turborepo-lab/issues"
   },
-  "homepage": "https://github.com/jbclores/turborepo-lab#readme"
+  "homepage": "https://github.com/jbclores/turborepo-lab#readme",
+  "devDependencies": {
+    "turbo": "^2.11.6"
+  }
 }
