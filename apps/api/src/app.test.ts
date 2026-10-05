@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, test } from '@jest/globals'
-import { healthResponseSchema } from '@lab/schemas'
+import { apiErrorSchema, healthResponseSchema } from '@lab/schemas'
 import type { Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { app } from './app.js'
@@ -31,6 +31,32 @@ describe('GET /api/health', () => {
     const res = await fetch(`${baseUrl}/health`)
 
     expect(res.status).toBe(404)
+  })
+})
+
+describe('unknown API routes', () => {
+  test('respond 404 with a body that satisfies the shared error schema', async () => {
+    const res = await fetch(`${baseUrl}/api/nope`)
+
+    expect(res.status).toBe(404)
+    expect(apiErrorSchema.parse(await res.json())).toEqual({
+      error: { code: 'not_found', message: 'Route not found' },
+    })
+  })
+
+  test('are served as JSON, not HTML', async () => {
+    const res = await fetch(`${baseUrl}/api/nope`)
+
+    expect(res.headers.get('content-type')).toContain('application/json')
+  })
+
+  test('outside /api also respond with the JSON error', async () => {
+    const res = await fetch(`${baseUrl}/nope`)
+
+    expect(res.status).toBe(404)
+    expect(apiErrorSchema.parse(await res.json())).toEqual({
+      error: { code: 'not_found', message: 'Route not found' },
+    })
   })
 })
 
