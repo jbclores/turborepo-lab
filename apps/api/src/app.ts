@@ -2,19 +2,25 @@ import type { ApiError, HealthResponse } from '@lab/schemas'
 import cors from 'cors'
 import express, { Router, type Response } from 'express'
 
-export const app = express()
+type AppOptions = { webOrigin: string }
 
-app.use(cors({ origin: process.env.WEB_ORIGIN ?? 'http://localhost:5173' }))
+export function createApp({ webOrigin }: AppOptions) {
+  const app = express()
 
-const api = Router()
+  app.use(cors({ origin: webOrigin }))
 
-api.get('/health', (_req, res: Response<HealthResponse>) => {
-  res.json({ status: 'ok' })
-})
+  const api = Router()
 
-app.use('/api', api)
+  api.get('/health', (_req, res: Response<HealthResponse>) => {
+    res.json({ status: 'ok' })
+  })
 
-// Registered last: any request no route handled gets the shared JSON error.
-app.use((_req, res: Response<ApiError>) => {
-  res.status(404).json({ error: { code: 'not_found', message: 'Route not found' } })
-})
+  app.use('/api', api)
+
+  // Registered last: any request no route handled gets the shared JSON error.
+  app.use((_req, res: Response<ApiError>) => {
+    res.status(404).json({ error: { code: 'not_found', message: 'Route not found' } })
+  })
+
+  return app
+}

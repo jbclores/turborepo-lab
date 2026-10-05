@@ -1,23 +1,30 @@
 import { afterAll, beforeAll, describe, expect, test } from '@jest/globals'
 import { apiErrorSchema, healthResponseSchema } from '@lab/schemas'
-import type { Server } from 'node:http'
+import type { Express } from 'express'
 import type { AddressInfo } from 'node:net'
-import { app } from './app.js'
+import { createApp } from './app.js'
 
-let server: Server
+type RunningApp = { baseUrl: string; close: () => Promise<void> }
+
+async function start(app: Express): Promise<RunningApp> {
+  const server = app.listen(0)
+  await new Promise<void>((resolve) => server.once('listening', resolve))
+  return {
+    baseUrl: `http://localhost:${(server.address() as AddressInfo).port}`,
+    close: () =>
+      new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve()))),
+  }
+}
+
+let running: RunningApp
 let baseUrl: string
 
 beforeAll(async () => {
-  server = app.listen(0)
-  await new Promise<void>((resolve) => server.once('listening', resolve))
-  baseUrl = `http://localhost:${(server.address() as AddressInfo).port}`
+  running = await start(createApp({ webOrigin: 'http://localhost:5173' }))
+  baseUrl = running.baseUrl
 })
 
-afterAll(async () => {
-  await new Promise<void>((resolve, reject) =>
-    server.close((err) => (err ? reject(err) : resolve())),
-  )
-})
+afterAll(() => running.close())
 
 describe('GET /api/health', () => {
   test('responds 200 with a body that satisfies the shared schema', async () => {
@@ -88,5 +95,33 @@ describe('CORS', () => {
 
     expect(res.status).toBe(204)
     expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+  })
+})
+
+describe('createApp', () => {
+  let custom: RunningApp
+  let customUrl: string
+
+  beforeAll(async () => {
+    custom = await start(createApp({ webOrigin: 'http://localhost:9999' }))
+    customUrl = custom.baseUrl
+  })
+
+  afterAll(() => custom.close())
+
+  test('allows the web origin it is given', async () => {
+    const res = await fetch(`${customUrl}/api/health`, {
+      headers: { Origin: 'http://localhost:9999' },
+    })
+
+    expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:9999')
+  })
+
+  test('does not allow the default web origin when given another one', async () => {
+    const res = await fetch(`${customUrl}/api/health`, {
+      headers: { Origin: 'http://localhost:5173' },
+    })
+
+    expect(res.headers.get('access-control-allow-origin')).not.toBe('http://localhost:5173')
   })
 })
