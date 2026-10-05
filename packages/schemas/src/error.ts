@@ -8,3 +8,5 @@ export const apiErrorSchema = z.object({
     message: nonEmptyString,
   }),
 })
+
+export type ApiError = z.infer<typeof apiErrorSchema>
