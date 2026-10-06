@@ -2,8 +2,10 @@ import { sql } from 'drizzle-orm'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import pg from 'pg'
 
-export function createDb(url: string) {
-  const pool = new pg.Pool({ connectionString: url })
+type CreateDbOptions = { connectionTimeoutMs?: number }
+
+export function createDb(url: string, { connectionTimeoutMs = 2000 }: CreateDbOptions = {}) {
+  const pool = new pg.Pool({ connectionString: url, connectionTimeoutMillis: connectionTimeoutMs })
   const db = drizzle(pool)
   return { db, close: () => pool.end() }
 }
