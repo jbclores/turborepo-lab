@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from '@jest/globals'
+import { createDb } from '@lab/db'
+import { getTestDatabaseUrl } from '@lab/db/testing'
 import { apiErrorSchema, healthResponseSchema } from '@lab/schemas'
 import type { Express } from 'express'
 import type { AddressInfo } from 'node:net'
@@ -16,15 +18,21 @@ async function start(app: Express): Promise<RunningApp> {
   }
 }
 
+const testDatabase = createDb(getTestDatabaseUrl(process.env))
+const db = testDatabase.db
+
 let running: RunningApp
 let baseUrl: string
 
 beforeAll(async () => {
-  running = await start(createApp({ webOrigin: 'http://localhost:5173' }))
+  running = await start(createApp({ webOrigin: 'http://localhost:5173', db }))
   baseUrl = running.baseUrl
 })
 
-afterAll(() => running.close())
+afterAll(async () => {
+  await running.close()
+  await testDatabase.close()
+})
 
 describe('GET /api/health', () => {
   test('responds 200 with a body that satisfies the shared schema', async () => {
@@ -38,6 +46,31 @@ describe('GET /api/health', () => {
     const res = await fetch(`${baseUrl}/health`)
 
     expect(res.status).toBe(404)
+  })
+})
+
+describe('GET /api/health/db', () => {
+  test('responds 200 with the shared health body when the database is reachable', async () => {
+    const res = await fetch(`${baseUrl}/api/health/db`)
+
+    expect(res.status).toBe(200)
+    expect(healthResponseSchema.parse(await res.json())).toEqual({ status: 'ok' })
+  })
+
+  test('responds 503 with the shared error body when the database cannot be reached', async () => {
+    const unreachable = createDb('postgres://lab:unused@127.0.0.1:1/lab_test', {
+      connectionTimeoutMs: 300,
+    })
+    const app = await start(createApp({ webOrigin: 'http://localhost:5173', db: unreachable.db }))
+
+    const res = await fetch(`${app.baseUrl}/api/health/db`)
+
+    await app.close()
+    await unreachable.close()
+    expect(res.status).toBe(503)
+    expect(apiErrorSchema.parse(await res.json())).toEqual({
+      error: { code: 'service_unavailable', message: 'Database is not reachable' },
+    })
   })
 })
 
@@ -103,7 +136,7 @@ describe('createApp', () => {
   let customUrl: string
 
   beforeAll(async () => {
-    custom = await start(createApp({ webOrigin: 'http://localhost:9999' }))
+    custom = await start(createApp({ webOrigin: 'http://localhost:9999', db }))
     customUrl = custom.baseUrl
   })
 
