@@ -1,5 +1,14 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
+  "boundaries": {
+    "tags": {
+      "db": {
+        "dependents": {
+          "deny": ["web"]
+        }
+      }
+    }
+  },
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
