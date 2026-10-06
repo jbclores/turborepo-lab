@@ -13,7 +13,8 @@
     "build": "tsc -p tsconfig.build.json",
     "dev": "tsc -p tsconfig.build.json --watch --preserveWatchOutput",
     "typecheck": "tsc --noEmit",
-    "test": "node --env-file-if-exists=../../.env --experimental-vm-modules --disable-warning=ExperimentalWarning ../../node_modules/jest/bin/jest.js"
+    "test": "node --env-file-if-exists=../../.env --experimental-vm-modules --disable-warning=ExperimentalWarning ../../node_modules/jest/bin/jest.js",
+    "db:generate": "drizzle-kit generate"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.3",
