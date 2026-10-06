@@ -8,6 +8,6 @@ if (!databaseUrl) throw new Error('DATABASE_URL is not set (see .env.example)')
 
 const { db } = createDb(databaseUrl)
 
-createApp({ webOrigin, db }).listen(port, () => {
+createApp({ webOrigin, db, secureCookies: process.env.NODE_ENV === 'production' }).listen(port, () => {
   console.log(`API listening on http://localhost:${port}`)
 })
