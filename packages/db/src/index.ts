@@ -1,3 +1,5 @@
 export * from './connection.js'
 export * from './migrate.js'
 export * from './schema.js'
+export * from './user-repository.js'
+export * from './session-repository.js'
