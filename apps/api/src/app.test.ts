@@ -2,21 +2,8 @@ import { afterAll, beforeAll, describe, expect, test } from '@jest/globals'
 import { createDb } from '@lab/db'
 import { getTestDatabaseUrl } from '@lab/db/testing'
 import { apiErrorSchema, healthResponseSchema } from '@lab/schemas'
-import type { Express } from 'express'
-import type { AddressInfo } from 'node:net'
 import { createApp } from './app.js'
-
-type RunningApp = { baseUrl: string; close: () => Promise<void> }
-
-async function start(app: Express): Promise<RunningApp> {
-  const server = app.listen(0)
-  await new Promise<void>((resolve) => server.once('listening', resolve))
-  return {
-    baseUrl: `http://localhost:${(server.address() as AddressInfo).port}`,
-    close: () =>
-      new Promise<void>((resolve, reject) => server.close((err) => (err ? reject(err) : resolve()))),
-  }
-}
+import { startApp, type RunningApp } from './testing/start-app.js'
 
 const testDatabase = createDb(getTestDatabaseUrl(process.env))
 const db = testDatabase.db
@@ -25,7 +12,7 @@ let running: RunningApp
 let baseUrl: string
 
 beforeAll(async () => {
-  running = await start(createApp({ webOrigin: 'http://localhost:5173', db }))
+  running = await startApp(createApp({ webOrigin: 'http://localhost:5173', db }))
   baseUrl = running.baseUrl
 })
 
@@ -61,7 +48,7 @@ describe('GET /api/health/db', () => {
     const unreachable = createDb('postgres://lab:unused@127.0.0.1:1/lab_test', {
       connectionTimeoutMs: 300,
     })
-    const app = await start(createApp({ webOrigin: 'http://localhost:5173', db: unreachable.db }))
+    const app = await startApp(createApp({ webOrigin: 'http://localhost:5173', db: unreachable.db }))
 
     const res = await fetch(`${app.baseUrl}/api/health/db`)
 
@@ -136,7 +123,7 @@ describe('createApp', () => {
   let customUrl: string
 
   beforeAll(async () => {
-    custom = await start(createApp({ webOrigin: 'http://localhost:9999', db }))
+    custom = await startApp(createApp({ webOrigin: 'http://localhost:9999', db }))
     customUrl = custom.baseUrl
   })
 

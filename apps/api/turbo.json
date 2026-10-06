@@ -2,6 +2,7 @@
   "extends": ["//"],
   "tasks": {
     "test": {
+      "dependsOn": ["^build", "@lab/db#test"],
       "cache": false
     }
   }
