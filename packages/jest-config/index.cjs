@@ -1,4 +1,4 @@
-// Shared by every Node/ESM workspace. Each workspace's jest.config.js spreads this.
+// Shared Jest settings for every workspace. Each workspace's jest.config.js imports this package and spreads it.
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/src'],

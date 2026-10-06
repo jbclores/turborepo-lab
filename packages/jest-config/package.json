@@ -1,0 +1,9 @@
+{
+  "name": "@lab/jest-config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Shared Jest settings (ESM, SWC transform, .js import mapping)",
+  "exports": {
+    ".": "./index.cjs"
+  }
+}

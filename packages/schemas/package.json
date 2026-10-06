@@ -19,6 +19,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@jest/globals": "^30.5.2"
+    "@jest/globals": "^30.5.2",
+    "@lab/jest-config": "^0.0.0"
   }
 }
