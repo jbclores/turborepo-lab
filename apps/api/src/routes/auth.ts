@@ -1,8 +1,8 @@
-import { createSession, createUser, EmailTakenError, findUserByEmail, type Db } from '@lab/db'
+import { createSession, createUser, deleteSession, EmailTakenError, findUserByEmail, type Db } from '@lab/db'
 import { loginInputSchema, registerInputSchema, type ApiError, type AuthResponse } from '@lab/schemas'
 import { Router, type Response } from 'express'
 import { hashPassword, verifyPassword } from '../lib/password.js'
-import { sessionCookieHeader } from '../lib/session-cookie.js'
+import { clearedSessionCookieHeader, readSessionToken, sessionCookieHeader } from '../lib/session-cookie.js'
 import { requireUser, type AuthenticatedLocals } from '../middleware/require-user.js'
 
 type AuthRouterOptions = {
@@ -73,6 +73,13 @@ export function authRouter({ db, passwordCost, sessionTtlMs, secureCookies }: Au
     }
     await startSession(res, user.id)
     res.json({ user: toPublicUser(user) })
+  })
+
+  router.post('/logout', async (req, res) => {
+    const token = readSessionToken(req.headers.cookie)
+    if (token) await deleteSession(db, token)
+    res.setHeader('Set-Cookie', clearedSessionCookieHeader({ secure: secureCookies }))
+    res.status(204).end()
   })
 
   return router

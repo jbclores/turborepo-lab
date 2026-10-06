@@ -18,3 +18,9 @@ export function sessionCookieHeader(token: string, { maxAgeMs, secure }: { maxAg
     secure,
   })
 }
+
+// Tells the browser to drop the cookie: an empty value that expired immediately.
+// Path and the other attributes match the cookie that was set, or the browser keeps the old one.
+export function clearedSessionCookieHeader({ secure }: { secure: boolean }): string {
+  return serialize(SESSION_COOKIE, '', { httpOnly: true, sameSite: 'lax', path: '/', maxAge: 0, secure })
+}

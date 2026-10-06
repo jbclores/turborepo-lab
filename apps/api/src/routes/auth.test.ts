@@ -116,7 +116,7 @@ describe('POST /api/auth/register', () => {
     expect(setCookie).toMatch(/^sid=[^;]+;/)
     expect(setCookie).toContain('HttpOnly')
     expect(setCookie).toContain('SameSite=Lax')
-    expect(setCookie).toContain('Path=/')
+    expect(setCookie).toMatch(/Path=\/(;|$)/)
     expect(setCookie).toMatch(/Max-Age=604800(;|$)/) // exactly 7 days in seconds, not a prefix of a bigger number
     expect(setCookie).not.toContain('Secure')
   })
@@ -384,5 +384,87 @@ describe('POST /api/auth/login', () => {
 
     const ratio = median(unknownEmail) / median(wrongPassword)
     expect(ratio).toBeGreaterThan(0.5) // without the defense this is about 0.05
+  })
+})
+
+describe('POST /api/auth/logout', () => {
+  function logout(cookie?: string) {
+    return fetch(`${running.baseUrl}/api/auth/logout`, {
+      method: 'POST',
+      headers: cookie ? { Cookie: cookie } : {},
+    })
+  }
+
+  function me(cookie: string) {
+    return fetch(`${running.baseUrl}/api/auth/me`, { headers: { Cookie: cookie } })
+  }
+
+  async function signedInCookie(email = 'ana@example.com') {
+    const user = await createUser(db, { email, passwordHash: 'not-used-here' })
+    const { token } = await createSession(db, { userId: user.id, ttlMs: HOUR })
+    return { user, cookie: `sid=${token}` }
+  }
+
+  test('responds 204 and ends the session on the server, so the cookie stops working', async () => {
+    const { cookie } = await signedInCookie()
+    expect((await me(cookie)).status).toBe(200)
+
+    const res = await logout(cookie)
+
+    expect(res.status).toBe(204)
+    expect((await me(cookie)).status).toBe(401)
+  })
+
+  test('clears the session cookie in the browser', async () => {
+    const { cookie } = await signedInCookie()
+
+    const res = await logout(cookie)
+
+    const setCookie = res.headers.get('set-cookie') ?? ''
+    expect(setCookie).toMatch(/^sid=;/)
+    expect(setCookie).toContain('Max-Age=0')
+    expect(setCookie).toMatch(/Path=\/(;|$)/)
+    expect(setCookie).toContain('HttpOnly')
+  })
+
+  test('keeps the Secure flag on the cleared cookie when secureCookies is on', async () => {
+    const secure = await startApp(
+      createApp({ webOrigin: 'http://localhost:5173', db, passwordCost: 4, secureCookies: true }),
+    )
+
+    const res = await fetch(`${secure.baseUrl}/api/auth/logout`, { method: 'POST' })
+
+    await secure.close()
+    expect(res.headers.get('set-cookie')).toContain('Secure')
+  })
+
+  test('ends only that session: the same user stays signed in on another device', async () => {
+    const { user, cookie } = await signedInCookie()
+    const other = await createSession(db, { userId: user.id, ttlMs: HOUR })
+
+    await logout(cookie)
+
+    expect((await me(`sid=${other.token}`)).status).toBe(200)
+  })
+
+  test('responds 204 and still clears the cookie when there is no session', async () => {
+    const res = await logout()
+
+    expect(res.status).toBe(204)
+    expect(res.headers.get('set-cookie') ?? '').toContain('Max-Age=0')
+  })
+
+  test('responds 204 when the session token is unknown', async () => {
+    const res = await logout('sid=not-a-real-token')
+
+    expect(res.status).toBe(204)
+  })
+
+  test('deletes the session row from the database', async () => {
+    const { cookie } = await signedInCookie()
+
+    await logout(cookie)
+
+    expect(await db.select().from(sessions)).toHaveLength(0)
   })
 })
