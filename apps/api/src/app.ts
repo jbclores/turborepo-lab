@@ -2,6 +2,7 @@ import { checkConnection, type Db } from '@lab/db'
 import type { ApiError, HealthResponse } from '@lab/schemas'
 import cors from 'cors'
 import express, { Router, type Response } from 'express'
+import { authRouter } from './routes/auth.js'
 
 type AppOptions = { webOrigin: string; db: Db }
 
@@ -23,6 +24,8 @@ export function createApp({ webOrigin, db }: AppOptions) {
     }
     res.status(503).json({ error: { code: 'service_unavailable', message: 'Database is not reachable' } })
   })
+
+  api.use('/auth', authRouter({ db }))
 
   app.use('/api', api)
 

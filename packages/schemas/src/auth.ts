@@ -35,3 +35,5 @@ export const publicUserSchema = z.strictObject({
 })
 
 export const authResponseSchema = z.object({ user: publicUserSchema })
+
+export type AuthResponse = z.infer<typeof authResponseSchema>
