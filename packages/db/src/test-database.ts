@@ -1,3 +1,6 @@
+import { sql } from 'drizzle-orm'
+import type { Db } from './connection.js'
+
 const LOCAL_HOSTS = ['localhost', '127.0.0.1']
 
 export function getTestDatabaseUrl(env: Record<string, string | undefined>): string {
@@ -15,4 +18,15 @@ export function getTestDatabaseUrl(env: Record<string, string | undefined>): str
     throw new Error('Refusing to run tests: the host must be localhost')
   }
   return url
+}
+
+export async function resetTestDatabase(db: Db): Promise<void> {
+  const result = await db.execute(sql`select current_database() as name`)
+  if (result.rows[0]?.name !== 'lab_test') {
+    throw new Error('Refusing to reset: the connected database is not lab_test')
+  }
+
+  await db.execute(sql`drop schema if exists public cascade`)
+  await db.execute(sql`drop schema if exists drizzle cascade`)
+  await db.execute(sql`create schema public`)
 }
