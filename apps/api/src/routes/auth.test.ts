@@ -1,8 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from '@jest/globals'
-import { createDb, createSession, createUser, migrateDatabase, users } from '@lab/db'
+import { createDb, createSession, createUser, migrateDatabase, sessions, users } from '@lab/db'
 import { getTestDatabaseUrl, resetTestDatabase } from '@lab/db/testing'
 import { apiErrorSchema, authResponseSchema } from '@lab/schemas'
 import { createApp } from '../app.js'
+import { hashPassword } from '../lib/password.js'
 import { startApp, type RunningApp } from '../testing/start-app.js'
 
 const testDatabase = createDb(getTestDatabaseUrl(process.env))
@@ -130,6 +131,14 @@ describe('POST /api/auth/register', () => {
     expect(authResponseSchema.parse(await me.json()).user.email).toBe('ana@example.com')
   })
 
+  test('stores a session that lasts as long as the cookie says (7 days)', async () => {
+    await register(credentials)
+
+    const [row] = await db.select().from(sessions)
+    const remaining = (row?.expiresAt.getTime() ?? 0) - Date.now()
+    expect(Math.abs(remaining - 7 * 24 * HOUR)).toBeLessThan(10_000)
+  })
+
   test('stores a bcrypt hash and never the password', async () => {
     await register(credentials)
 
@@ -235,5 +244,145 @@ describe('POST /api/auth/register', () => {
 
     await secure.close()
     expect(res.headers.get('set-cookie')).toContain('Secure')
+  })
+})
+
+describe('POST /api/auth/login', () => {
+  const password = 'correct horse battery'
+
+  function login(body: unknown) {
+    return fetch(`${running.baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+  }
+
+  async function seedUser(email = 'ana@example.com') {
+    return createUser(db, { email, passwordHash: await hashPassword(password, { cost: 4 }) })
+  }
+
+  function cookiePair(res: Response) {
+    return (res.headers.get('set-cookie') ?? '').split(';')[0] ?? ''
+  }
+
+  function me(cookie: string) {
+    return fetch(`${running.baseUrl}/api/auth/me`, { headers: { Cookie: cookie } })
+  }
+
+  test('signs the user in: 200, the public user and an HttpOnly session cookie', async () => {
+    await seedUser()
+
+    const res = await login({ email: 'ana@example.com', password })
+
+    expect(res.status).toBe(200)
+    expect(authResponseSchema.parse(await res.json()).user.email).toBe('ana@example.com')
+    const setCookie = res.headers.get('set-cookie') ?? ''
+    expect(setCookie).toMatch(/^sid=[^;]+;/)
+    expect(setCookie).toContain('HttpOnly')
+    expect(setCookie).toContain('SameSite=Lax')
+    expect(setCookie).toMatch(/Max-Age=604800(;|$)/)
+  })
+
+  test('stores a session that lasts as long as the cookie says (7 days)', async () => {
+    await seedUser()
+
+    await login({ email: 'ana@example.com', password })
+
+    const [row] = await db.select().from(sessions)
+    const remaining = (row?.expiresAt.getTime() ?? 0) - Date.now()
+    expect(Math.abs(remaining - 7 * 24 * HOUR)).toBeLessThan(10_000)
+  })
+
+  test('the cookie from login works for /me', async () => {
+    await seedUser()
+
+    const res = await login({ email: 'ana@example.com', password })
+
+    expect((await me(cookiePair(res))).status).toBe(200)
+  })
+
+  test('creates a new session for every login, and the earlier ones keep working', async () => {
+    await seedUser()
+
+    const first = cookiePair(await login({ email: 'ana@example.com', password }))
+    const second = cookiePair(await login({ email: 'ana@example.com', password }))
+
+    expect(first).not.toBe(second)
+    expect((await me(first)).status).toBe(200)
+    expect((await me(second)).status).toBe(200)
+  })
+
+  test('accepts the email in a different case', async () => {
+    await seedUser()
+
+    const res = await login({ email: '  ANA@Example.com ', password })
+
+    expect(res.status).toBe(200)
+  })
+
+  test('responds 401 invalid_credentials for a wrong password, and sets no cookie', async () => {
+    await seedUser()
+
+    const res = await login({ email: 'ana@example.com', password: 'not the right password' })
+
+    expect(res.status).toBe(401)
+    expect(apiErrorSchema.parse(await res.json())).toEqual({
+      error: { code: 'invalid_credentials', message: 'Invalid email or password' },
+    })
+    expect(res.headers.get('set-cookie')).toBeNull()
+  })
+
+  test('answers an unknown email with exactly the same response as a wrong password', async () => {
+    await seedUser()
+
+    const wrongPassword = await login({ email: 'ana@example.com', password: 'not the right password' })
+    const unknownEmail = await login({ email: 'nobody@example.com', password: 'not the right password' })
+
+    expect(unknownEmail.status).toBe(wrongPassword.status)
+    expect(await unknownEmail.text()).toBe(await wrongPassword.text())
+    expect(unknownEmail.headers.get('set-cookie')).toBeNull()
+  })
+
+  test.each([
+    ['an invalid email', { email: 'not-an-email', password }],
+    ['an empty password', { email: 'ana@example.com', password: '' }],
+    ['a password longer than 72 bytes', { email: 'ana@example.com', password: 'a'.repeat(73) }],
+    ['a missing password', { email: 'ana@example.com' }],
+  ])('responds 400 for %s', async (_name, body) => {
+    const res = await login(body)
+
+    expect(res.status).toBe(400)
+    expect(apiErrorSchema.parse(await res.json()).error.code).toBe('validation_error')
+  })
+
+  test('takes about as long for an unknown email as for a wrong password, so timing reveals nothing', async () => {
+    // A realistic work factor makes the hashing cost visible next to ordinary request overhead.
+    const cost = 10
+    const timed = await startApp(createApp({ webOrigin: 'http://localhost:5173', db, passwordCost: cost }))
+    await createUser(db, { email: 'ana@example.com', passwordHash: await hashPassword(password, { cost }) })
+    const attempt = async (email: string) => {
+      const startedAt = performance.now()
+      const res = await fetch(`${timed.baseUrl}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: 'not the right password' }),
+      })
+      await res.text()
+      return performance.now() - startedAt
+    }
+    const median = (values: number[]) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)] ?? 0
+
+    await attempt('ana@example.com') // warm up
+    const wrongPassword: number[] = []
+    const unknownEmail: number[] = []
+    for (let i = 0; i < 5; i++) {
+      wrongPassword.push(await attempt('ana@example.com'))
+      unknownEmail.push(await attempt('nobody@example.com'))
+    }
+    await timed.close()
+
+    const ratio = median(unknownEmail) / median(wrongPassword)
+    expect(ratio).toBeGreaterThan(0.5) // without the defense this is about 0.05
   })
 })
