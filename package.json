@@ -17,7 +17,8 @@
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose down",
     "db:reset": "docker compose down -v && docker compose up -d --wait",
-    "boundaries": "turbo boundaries"
+    "boundaries": "turbo boundaries",
+    "db:migrate": "npm run build -w @lab/db && npm run db:migrate -w @lab/db"
   },
   "repository": {
     "type": "git",
