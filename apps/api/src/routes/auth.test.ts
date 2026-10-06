@@ -468,3 +468,73 @@ describe('POST /api/auth/logout', () => {
     expect(await db.select().from(sessions)).toHaveLength(0)
   })
 })
+
+describe('Origin check on state-changing requests', () => {
+  const webOrigin = 'http://localhost:5173'
+  const credentials = { email: 'ana@example.com', password: 'correct horse battery' }
+
+  function post(path: string, init: { origin?: string; cookie?: string; body?: unknown } = {}) {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (init.origin !== undefined) headers.Origin = init.origin
+    if (init.cookie) headers.Cookie = init.cookie
+    return fetch(`${running.baseUrl}/api/auth/${path}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(init.body ?? {}),
+    })
+  }
+
+  async function signedInCookie() {
+    const user = await createUser(db, { email: 'ana@example.com', passwordHash: 'not-used-here' })
+    const { token } = await createSession(db, { userId: user.id, ttlMs: HOUR })
+    return `sid=${token}`
+  }
+
+  test('refuses a POST from another origin with 403, and does nothing', async () => {
+    const res = await post('register', { origin: 'http://evil.example', body: credentials })
+
+    expect(res.status).toBe(403)
+    expect(apiErrorSchema.parse(await res.json())).toEqual({
+      error: { code: 'forbidden_origin', message: 'Origin not allowed' },
+    })
+    expect(await db.select().from(users)).toHaveLength(0)
+  })
+
+  test('refuses a cross-site logout, so the session survives', async () => {
+    const cookie = await signedInCookie()
+
+    const res = await post('logout', { origin: 'http://evil.example', cookie })
+
+    expect(res.status).toBe(403)
+    expect(await db.select().from(sessions)).toHaveLength(1)
+  })
+
+  test('allows a POST from the web origin', async () => {
+    const res = await post('register', { origin: webOrigin, body: credentials })
+
+    expect(res.status).toBe(201)
+  })
+
+  test('allows a POST with no Origin header (not a browser, so not a cross-site attack)', async () => {
+    const res = await post('register', { body: credentials })
+
+    expect(res.status).toBe(201)
+  })
+
+  test.each([
+    ['an origin that merely starts with the allowed one', 'http://localhost:5173.evil.example'],
+    ['the same host on another port', 'http://localhost:9999'],
+    ['the same host over https', 'https://localhost:5173'],
+    ['the opaque origin "null"', 'null'],
+  ])('refuses %s', async (_name, origin) => {
+    const res = await post('register', { origin, body: credentials })
+
+    expect(res.status).toBe(403)
+  })
+
+  test('does not block reads from another origin (GET is safe, and CORS controls who can read)', async () => {
+    const res = await fetch(`${running.baseUrl}/api/health`, { headers: { Origin: 'http://evil.example' } })
+
+    expect(res.status).toBe(200)
+  })
+})

@@ -96,6 +96,14 @@ describe('CORS', () => {
     expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
   })
 
+  test('lets the web origin send cookies (Access-Control-Allow-Credentials)', async () => {
+    const res = await fetch(`${baseUrl}/api/health`, {
+      headers: { Origin: 'http://localhost:5173' },
+    })
+
+    expect(res.headers.get('access-control-allow-credentials')).toBe('true')
+  })
+
   test('does not echo an origin that is not allowed', async () => {
     const res = await fetch(`${baseUrl}/api/health`, {
       headers: { Origin: 'http://evil.example' },
@@ -115,6 +123,7 @@ describe('CORS', () => {
 
     expect(res.status).toBe(204)
     expect(res.headers.get('access-control-allow-origin')).toBe('http://localhost:5173')
+    expect(res.headers.get('access-control-allow-credentials')).toBe('true')
   })
 })
 

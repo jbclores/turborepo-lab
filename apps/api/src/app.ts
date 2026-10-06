@@ -2,6 +2,7 @@ import { checkConnection, type Db } from '@lab/db'
 import type { ApiError, HealthResponse } from '@lab/schemas'
 import cors from 'cors'
 import express, { Router, type NextFunction, type Request, type Response } from 'express'
+import { requireAllowedOrigin } from './middleware/require-allowed-origin.js'
 import { authRouter } from './routes/auth.js'
 
 type AppOptions = {
@@ -29,7 +30,8 @@ export function createApp({
 }: AppOptions) {
   const app = express()
 
-  app.use(cors({ origin: webOrigin }))
+  app.use(cors({ origin: webOrigin, credentials: true }))
+  app.use(requireAllowedOrigin(webOrigin))
   app.use(express.json({ limit: '10kb' }))
 
   const api = Router()
