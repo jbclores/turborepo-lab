@@ -92,3 +92,45 @@ describe('authResponseSchema', () => {
     expect(authResponseSchema.safeParse({ user: { ...user, email: 'nope' } }).success).toBe(false)
   })
 })
+
+describe('validation messages (shown under the form fields)', () => {
+  // The first message for each field, the one the form shows.
+  function messages(schema: typeof loginInputSchema, input: unknown): Record<string, string> {
+    const result = schema.safeParse(input)
+    if (result.success) return {}
+    const byField: Record<string, string> = {}
+    for (const issue of result.error.issues) byField[String(issue.path[0])] ??= issue.message
+    return byField
+  }
+
+  test('an email that is not an email address', () => {
+    expect(messages(registerInputSchema, { email: 'not-an-email', password: validPassword })).toEqual({
+      email: 'Enter a valid email address',
+    })
+  })
+
+  test('an empty email', () => {
+    expect(messages(loginInputSchema, { email: '', password: 'x' })).toEqual({ email: 'Enter a valid email address' })
+  })
+
+  test('a register password shorter than 12 characters', () => {
+    expect(messages(registerInputSchema, { email: 'ana@example.com', password: 'a'.repeat(11) })).toEqual({
+      password: 'Password must be at least 12 characters',
+    })
+  })
+
+  test('an empty login password', () => {
+    expect(messages(loginInputSchema, { email: 'ana@example.com', password: '' })).toEqual({
+      password: 'Enter your password',
+    })
+  })
+
+  test.each([
+    ['register', registerInputSchema],
+    ['login', loginInputSchema],
+  ])('a %s password over 72 bytes says why, in words a user understands', (_name, schema) => {
+    expect(messages(schema, { email: 'ana@example.com', password: 'é'.repeat(37) })).toEqual({
+      password: 'Password is too long: use at most 72 characters (accented letters and emoji count as more than one)',
+    })
+  })
+})

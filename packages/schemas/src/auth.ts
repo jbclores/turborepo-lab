@@ -13,18 +13,20 @@ function utf8ByteLength(value: string): number {
 }
 
 const withinByteLimit = (value: string) => utf8ByteLength(value) <= MAX_PASSWORD_BYTES
-const byteLimitMessage = `Password must be at most ${MAX_PASSWORD_BYTES} bytes`
+// Users think in characters, not bytes, so the message says characters and explains the exception.
+const byteLimitMessage = `Password is too long: use at most ${MAX_PASSWORD_BYTES} characters (accented letters and emoji count as more than one)`
 
-const email = z.string().trim().toLowerCase().pipe(z.email())
+// These messages are shown under the form fields, so they say what to do, not what went wrong.
+const email = z.string().trim().toLowerCase().pipe(z.email('Enter a valid email address'))
 
 export const registerInputSchema = z.object({
   email,
-  password: z.string().min(12).refine(withinByteLimit, byteLimitMessage),
+  password: z.string().min(12, 'Password must be at least 12 characters').refine(withinByteLimit, byteLimitMessage),
 })
 
 export const loginInputSchema = z.object({
   email,
-  password: z.string().min(1).refine(withinByteLimit, byteLimitMessage),
+  password: z.string().min(1, 'Enter your password').refine(withinByteLimit, byteLimitMessage),
 })
 
 // strict: an object carrying extra fields (such as a passwordHash) is rejected, not silently trimmed.
