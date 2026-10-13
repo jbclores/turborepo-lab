@@ -3,6 +3,7 @@ import type { ApiError, HealthResponse } from '@lab/schemas'
 import cors from 'cors'
 import express, { Router, type NextFunction, type Request, type Response } from 'express'
 import { requireAllowedOrigin } from './middleware/require-allowed-origin.js'
+import { accountsRouter } from './routes/accounts.js'
 import { authRouter } from './routes/auth.js'
 
 type AppOptions = {
@@ -49,6 +50,7 @@ export function createApp({
   })
 
   api.use('/auth', authRouter({ db, passwordCost, sessionTtlMs, secureCookies }))
+  api.use('/accounts', accountsRouter({ db }))
 
   app.use('/api', api)
 
