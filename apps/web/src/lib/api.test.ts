@@ -1,36 +1,11 @@
 import { afterEach, describe, expect, jest, test } from '@jest/globals'
 import { authResponseSchema, healthResponseSchema } from '@lab/schemas'
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import type { AddressInfo } from 'node:net'
 import { ApiRequestError, createApiGet, createApiPost } from './api.js'
-
-type Handler = (req: IncomingMessage, res: ServerResponse) => void
-
-const servers: Server[] = []
-
-async function serve(handler: Handler): Promise<string> {
-  const server = createServer(handler)
-  servers.push(server)
-  await new Promise<void>((resolve) => server.listen(0, resolve))
-  return `http://localhost:${(server.address() as AddressInfo).port}`
-}
-
-function json(res: ServerResponse, status: number, body: unknown) {
-  res.writeHead(status, { 'content-type': 'application/json' })
-  res.end(JSON.stringify(body))
-}
-
-async function readBody(req: IncomingMessage): Promise<string> {
-  let body = ''
-  for await (const chunk of req) body += chunk
-  return body
-}
+import { closeServers, json, readBody, serve } from '../test-support/http-server.js'
 
 afterEach(async () => {
   jest.restoreAllMocks()
-  await Promise.all(
-    servers.splice(0).map((s) => new Promise<void>((resolve) => s.close(() => resolve()))),
-  )
+  await closeServers()
 })
 
 describe('createApiGet', () => {
@@ -94,7 +69,7 @@ describe('createApiGet', () => {
 
   test('rejects when the server cannot be reached', async () => {
     const baseUrl = await serve((_req, res) => json(res, 200, { status: 'ok' }))
-    await Promise.all(servers.splice(0).map((s) => new Promise<void>((r) => s.close(() => r()))))
+    await closeServers()
     const apiGet = createApiGet(baseUrl)
 
     await expect(apiGet('/api/health', healthResponseSchema)).rejects.toThrow()
