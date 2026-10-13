@@ -1,7 +1,7 @@
 import { healthResponseSchema } from '@lab/schemas'
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
-import { apiGet, apiPost, meQuery } from '../lib/client'
+import { apiGet, apiSend, meQuery } from '../lib/client'
 
 export const Route = createFileRoute('/')({
   // Runs before the page renders, so a signed-out visitor never sees it.
@@ -21,7 +21,7 @@ function HomePage() {
     queryFn: ({ signal }) => apiGet('/api/health', healthResponseSchema, signal),
   })
   const logout = useMutation({
-    mutationFn: () => apiPost('/api/auth/logout'),
+    mutationFn: () => apiSend('POST', '/api/auth/logout'),
     onSuccess: async () => {
       // Signed out first, so the /login guard does not send us straight back here.
       queryClient.setQueryData(meQuery.queryKey, null)

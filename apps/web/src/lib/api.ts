@@ -43,18 +43,20 @@ export function createApiGet(baseUrl: string) {
   }
 }
 
-export function createApiPost(baseUrl: string) {
+type Method = 'POST' | 'PATCH' | 'DELETE'
+
+export function createApiSend(baseUrl: string) {
   // With a schema, the JSON response is parsed and returned; without one (such as a 204), nothing is read.
-  function apiPost<T>(path: string, body: unknown, schema: Parser<T>): Promise<T>
-  function apiPost(path: string, body?: unknown): Promise<void>
-  async function apiPost<T>(path: string, body?: unknown, schema?: Parser<T>): Promise<T | void> {
+  function apiSend<T>(method: Method, path: string, body: unknown, schema: Parser<T>): Promise<T>
+  function apiSend(method: Method, path: string, body?: unknown): Promise<void>
+  async function apiSend<T>(method: Method, path: string, body?: unknown, schema?: Parser<T>): Promise<T | void> {
     const res = await request(
       `${baseUrl}${path}`,
       body === undefined
-        ? { method: 'POST' }
-        : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
+        ? { method }
+        : { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) },
     )
     if (schema) return schema.parse(await res.json())
   }
-  return apiPost
+  return apiSend
 }

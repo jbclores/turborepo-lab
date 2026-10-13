@@ -1,7 +1,7 @@
 import { authResponseSchema, loginInputSchema } from '@lab/schemas'
 import { createFileRoute, Link } from '@tanstack/react-router'
 import { AuthForm } from '../components/auth-form'
-import { apiPost } from '../lib/client'
+import { apiSend } from '../lib/client'
 import { redirectIfSignedIn, validateGuestSearch } from '../lib/guest-route'
 
 export const Route = createFileRoute('/login')({
@@ -17,7 +17,7 @@ function LoginPage() {
       title="Log in"
       submitLabel="Log in"
       schema={loginInputSchema}
-      submit={(credentials) => apiPost('/api/auth/login', credentials, authResponseSchema)}
+      submit={(credentials) => apiSend('POST', '/api/auth/login', credentials, authResponseSchema)}
       passwordAutoComplete="current-password"
       redirect={redirect}
       footer={

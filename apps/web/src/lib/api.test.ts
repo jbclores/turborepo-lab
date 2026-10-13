@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, jest, test } from '@jest/globals'
-import { authResponseSchema, healthResponseSchema } from '@lab/schemas'
-import { ApiRequestError, createApiGet, createApiPost } from './api.js'
+import { accountResponseSchema, authResponseSchema, healthResponseSchema } from '@lab/schemas'
+import { ApiRequestError, createApiGet, createApiSend } from './api.js'
 import { closeServers, json, readBody, serve } from '../test-support/http-server.js'
 
 afterEach(async () => {
@@ -119,7 +119,7 @@ describe('createApiGet: cookies and errors', () => {
   })
 })
 
-describe('createApiPost', () => {
+describe('createApiSend', () => {
   const user = { id: '7f3c2a8e-1b4d-4c6a-9e2f-0a1b2c3d4e5f', email: 'ana@example.com', createdAt: '2026-10-06T00:00:00.000Z' }
 
   test('POSTs the body as JSON to the base URL joined with the path, and returns the parsed response', async () => {
@@ -129,7 +129,7 @@ describe('createApiPost', () => {
       json(res, 201, { user })
     })
 
-    const result = await createApiPost(baseUrl)('/api/auth/register', { email: 'ana@example.com', password: 'x' }, authResponseSchema)
+    const result = await createApiSend(baseUrl)('POST', '/api/auth/register', { email: 'ana@example.com', password: 'x' }, authResponseSchema)
 
     expect(seen).toEqual({
       method: 'POST',
@@ -144,7 +144,7 @@ describe('createApiPost', () => {
     const fetchSpy = jest.spyOn(globalThis, 'fetch')
     const baseUrl = await serve((_req, res) => json(res, 200, { user }))
 
-    await createApiPost(baseUrl)('/api/auth/login', {}, authResponseSchema)
+    await createApiSend(baseUrl)('POST', '/api/auth/login', {}, authResponseSchema)
 
     expect(fetchSpy.mock.calls[0]?.[1]?.credentials).toBe('include')
   })
@@ -157,7 +157,7 @@ describe('createApiPost', () => {
       res.end()
     })
 
-    await expect(createApiPost(baseUrl)('/api/auth/logout')).resolves.toBeUndefined()
+    await expect(createApiSend(baseUrl)('POST', '/api/auth/logout')).resolves.toBeUndefined()
     expect(seen).toEqual({ contentType: undefined, body: '' })
   })
 
@@ -166,7 +166,7 @@ describe('createApiPost', () => {
       json(res, 409, { error: { code: 'email_taken', message: 'Email already registered' } }),
     )
 
-    const error = await createApiPost(baseUrl)('/api/auth/register', {}, authResponseSchema).catch((e: unknown) => e)
+    const error = await createApiSend(baseUrl)('POST', '/api/auth/register', {}, authResponseSchema).catch((e: unknown) => e)
 
     expect(error).toBeInstanceOf(ApiRequestError)
     expect(error).toMatchObject({ status: 409, code: 'email_taken', message: 'Email already registered' })
@@ -175,6 +175,41 @@ describe('createApiPost', () => {
   test('throws when an OK response does not match the schema (a leaked passwordHash)', async () => {
     const baseUrl = await serve((_req, res) => json(res, 200, { user: { ...user, passwordHash: '$2b$12$...' } }))
 
-    await expect(createApiPost(baseUrl)('/api/auth/login', {}, authResponseSchema)).rejects.toThrow()
+    await expect(createApiSend(baseUrl)('POST', '/api/auth/login', {}, authResponseSchema)).rejects.toThrow()
+  })
+})
+
+describe('createApiSend: PATCH and DELETE', () => {
+  test.each(['PATCH', 'DELETE'] as const)('sends %s with the method it was given', async (method) => {
+    let seen: string | undefined
+    const baseUrl = await serve((req, res) => {
+      seen = req.method
+      res.writeHead(204)
+      res.end()
+    })
+
+    await createApiSend(baseUrl)(method, '/api/accounts/1')
+
+    expect(seen).toBe(method)
+  })
+
+  test('PATCH sends the JSON body and parses the response', async () => {
+    const account = { id: '7f3c2a8e-1b4d-4c6a-9e2f-0a1b2c3d4e5f', name: 'Purse', type: 'cash', createdAt: '2026-10-13T00:00:00.000Z' }
+    let body: string | undefined
+    const baseUrl = await serve(async (req, res) => {
+      body = await readBody(req)
+      json(res, 200, { account })
+    })
+
+    const result = await createApiSend(baseUrl)('PATCH', '/api/accounts/1', { name: 'Purse' }, accountResponseSchema)
+
+    expect(body).toBe(JSON.stringify({ name: 'Purse' }))
+    expect(result).toEqual({ account })
+  })
+
+  test('a 404 on DELETE throws an ApiRequestError with the code not_found', async () => {
+    const baseUrl = await serve((_req, res) => json(res, 404, { error: { code: 'not_found', message: 'Account not found' } }))
+
+    await expect(createApiSend(baseUrl)('DELETE', '/api/accounts/1')).rejects.toMatchObject({ status: 404, code: 'not_found' })
   })
 })
