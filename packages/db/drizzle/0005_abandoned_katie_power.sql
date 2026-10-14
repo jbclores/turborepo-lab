@@ -1,0 +1,1 @@
+ALTER TABLE "accounts" ADD CONSTRAINT "accounts_name_trimmed_1_to_50" CHECK ("accounts"."name" = btrim("accounts"."name") and char_length("accounts"."name") between 1 and 50);

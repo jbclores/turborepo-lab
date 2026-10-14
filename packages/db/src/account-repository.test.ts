@@ -189,3 +189,38 @@ test("deleting a user deletes that user's accounts", async () => {
 
   expect(await db.select().from(accounts)).toHaveLength(0)
 })
+
+// The API validates names, but the repository is exported (seed scripts, the transactions milestone),
+// so the database refuses what the API would refuse, by name of the constraint.
+describe('the database itself refuses names the API would refuse', () => {
+  const constraintOf = (error: unknown) => (error as { cause?: { constraint?: string } }).cause?.constraint
+
+  test.each([
+    ['an empty name', ''],
+    ['a name with spaces around it', '  Wallet '],
+    ['a 51-character name', 'a'.repeat(51)],
+  ])('on create: %s', async (_label, name) => {
+    const ana = await newUser('ana@example.com')
+
+    const error = await createAccount(db, { userId: ana.id, name, type: 'cash' }).catch((e: unknown) => e)
+
+    expect(constraintOf(error)).toBe('accounts_name_trimmed_1_to_50')
+  })
+
+  test('on update: a name of only spaces', async () => {
+    const ana = await newUser('ana@example.com')
+    const account = await createAccount(db, { userId: ana.id, name: 'Wallet', type: 'cash' })
+
+    const error = await updateAccount(db, { userId: ana.id, id: account.id, name: '   ' }).catch((e: unknown) => e)
+
+    expect(constraintOf(error)).toBe('accounts_name_trimmed_1_to_50')
+  })
+
+  test('accepts a trimmed name of exactly 50 characters', async () => {
+    const ana = await newUser('ana@example.com')
+
+    await expect(createAccount(db, { userId: ana.id, name: 'a'.repeat(50), type: 'cash' })).resolves.toMatchObject({
+      name: 'a'.repeat(50),
+    })
+  })
+})
