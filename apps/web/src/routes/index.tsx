@@ -2,6 +2,7 @@ import { healthResponseSchema } from '@lab/schemas'
 import { useMutation, useQuery, useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { apiGet, apiSend, meQuery } from '../lib/client'
+import { switchUser } from '../lib/me'
 
 export const Route = createFileRoute('/')({
   // Runs before the page renders, so a signed-out visitor never sees it.
@@ -26,6 +27,8 @@ function HomePage() {
       // Signed out first, so the /login guard does not send us straight back here.
       queryClient.setQueryData(meQuery.queryKey, null)
       await navigate({ to: '/login' })
+      // Then forget everything that belonged to this user.
+      switchUser(queryClient, null)
     },
   })
 

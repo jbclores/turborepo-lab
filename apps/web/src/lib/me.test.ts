@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from '@jest/globals'
+import { QueryClient } from '@tanstack/react-query'
 import { ApiRequestError, createApiGet } from './api.js'
-import { createFetchMe } from './me.js'
+import { createFetchMe, ME_QUERY_KEY, switchUser } from './me.js'
 import { closeServers, json, serve } from '../test-support/http-server.js'
 
 const user = { id: '7f3c2a8e-1b4d-4c6a-9e2f-0a1b2c3d4e5f', email: 'ana@example.com', createdAt: '2026-10-06T00:00:00.000Z' }
@@ -61,5 +62,30 @@ describe('fetchMe (the ["me"] query function)', () => {
     controller.abort()
 
     await expect(fetchMe(controller.signal)).rejects.toThrow()
+  })
+})
+
+describe('switchUser', () => {
+  test("forgets everything cached for the previous user and stores the new one", () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(['accounts'], [{ name: "Ana's wallet" }])
+    queryClient.setQueryData(['health'], { status: 'ok' })
+    queryClient.setQueryData(ME_QUERY_KEY, { id: 'a', email: 'ana@example.com', createdAt: '' })
+
+    switchUser(queryClient, { id: 'b', email: 'ben@example.com', createdAt: '' })
+
+    expect(queryClient.getQueryData(['accounts'])).toBeUndefined()
+    expect(queryClient.getQueryData(['health'])).toBeUndefined()
+    expect(queryClient.getQueryData(ME_QUERY_KEY)).toEqual({ id: 'b', email: 'ben@example.com', createdAt: '' })
+  })
+
+  test('stores null when signing out', () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(['accounts'], [])
+
+    switchUser(queryClient, null)
+
+    expect(queryClient.getQueryData(['accounts'])).toBeUndefined()
+    expect(queryClient.getQueryData(ME_QUERY_KEY)).toBeNull()
   })
 })

@@ -5,7 +5,7 @@ import { useNavigate } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { ApiRequestError } from '../lib/api'
-import { meQuery } from '../lib/client'
+import { switchUser } from '../lib/me'
 import { safeRedirect } from '../lib/safe-redirect'
 
 type Credentials = { email: string; password: string }
@@ -30,8 +30,9 @@ export function AuthForm({ title, submitLabel, schema, submit, passwordAutoCompl
   const mutation = useMutation({
     mutationFn: submit,
     onSuccess: async ({ user }) => {
-      // The response already says who is signed in, so write it to ['me'] instead of refetching.
-      queryClient.setQueryData(meQuery.queryKey, user)
+      // A different person may have used this browser: drop their cached data, then store who is signed in
+      // (the response already says, so no refetch).
+      switchUser(queryClient, user)
       await navigate({ href: safeRedirect(redirect) })
     },
     onError: (error) => {
