@@ -40,12 +40,15 @@ function AuthenticatedLayout() {
         <Link to="/accounts" className="text-emerald-700 [&.active]:font-semibold">
           Accounts
         </Link>
-        <span className="ml-auto text-slate-500">{user.email}</span>
+        {/* A long email is cut with an ellipsis (full address on hover) instead of squeezing the button. */}
+        <span className="ml-auto min-w-0 truncate text-slate-500" title={user.email}>
+          {user.email}
+        </span>
         <button
           type="button"
           onClick={() => logout.mutate()}
           disabled={logout.isPending}
-          className="rounded bg-slate-800 px-3 py-1 text-white disabled:opacity-50"
+          className="shrink-0 whitespace-nowrap rounded bg-slate-800 px-3 py-1 text-white disabled:opacity-50"
         >
           Log out
         </button>

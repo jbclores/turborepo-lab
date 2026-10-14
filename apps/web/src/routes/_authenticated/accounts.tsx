@@ -32,14 +32,22 @@ function AccountsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
   const refresh = () => queryClient.invalidateQueries({ queryKey: accountsQuery.queryKey })
 
-  // Runs a change, then refetches the list. Errors are mapped onto the form or the page.
-  async function change(run: () => Promise<unknown>, setError?: UseFormSetError<CreateAccountInput>): Promise<boolean> {
+  // Runs a change, then refetches the list *before* reporting back, so a form that closes reveals the new
+  // data rather than the old. `done` runs when the change succeeded (or the account no longer exists) and
+  // says what to close; nothing else on the page is touched. Errors are mapped onto the form or the page.
+  async function change(
+    run: () => Promise<unknown>,
+    { setError, done }: { setError?: UseFormSetError<CreateAccountInput>; done?: () => void } = {},
+  ): Promise<boolean> {
     setNotice(null)
     try {
       await run()
-      setEditingId(null)
+      await refresh()
+      done?.()
       return true
     } catch (error) {
       const outcome = describeAccountError(error)
@@ -49,25 +57,32 @@ function AccountsPage() {
         return false
       }
       if ('notFound' in outcome) {
-        setEditingId(null)
+        done?.()
         setNotice(outcome.message)
       } else if (setError) {
         setError(outcome.field, { message: outcome.message })
       } else {
         setNotice(outcome.message)
       }
-      return false
-    } finally {
       await refresh()
+      return false
     }
   }
 
   const create = (values: CreateAccountInput, setError: UseFormSetError<CreateAccountInput>) =>
-    change(() => apiSend('POST', '/api/accounts', values, accountResponseSchema), setError)
+    change(() => apiSend('POST', '/api/accounts', values, accountResponseSchema), { setError })
   const update = (id: string) => (values: CreateAccountInput, setError: UseFormSetError<CreateAccountInput>) =>
-    change(() => apiSend('PATCH', `/api/accounts/${id}`, values, accountResponseSchema), setError)
-  const remove = (account: Account) => {
-    if (window.confirm(`Delete "${account.name}"?`)) void change(() => apiSend('DELETE', `/api/accounts/${account.id}`))
+    change(() => apiSend('PATCH', `/api/accounts/${id}`, values, accountResponseSchema), {
+      setError,
+      done: () => setEditingId(null),
+    })
+  const remove = async (account: Account) => {
+    if (!window.confirm(`Delete "${account.name}"?`)) return
+    setDeletingId(account.id)
+    await change(() => apiSend('DELETE', `/api/accounts/${account.id}`), {
+      done: () => setEditingId((current) => (current === account.id ? null : current)),
+    })
+    setDeletingId(null)
   }
 
   return (
@@ -99,7 +114,12 @@ function AccountsPage() {
                   <button type="button" onClick={() => setEditingId(account.id)} className="ml-auto text-emerald-700 underline">
                     Edit
                   </button>
-                  <button type="button" onClick={() => remove(account)} className="text-red-700 underline">
+                  <button
+                    type="button"
+                    onClick={() => void remove(account)}
+                    disabled={deletingId === account.id}
+                    className="text-red-700 underline disabled:opacity-50"
+                  >
                     Delete
                   </button>
                 </div>
