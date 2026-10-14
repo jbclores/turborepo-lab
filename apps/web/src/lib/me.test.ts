@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test } from '@jest/globals'
 import { QueryClient } from '@tanstack/react-query'
 import { ApiRequestError, createApiGet } from './api.js'
-import { createFetchMe, ME_QUERY_KEY, switchUser } from './me.js'
+import { createFetchMe, forgetIfSignedOut, ME_QUERY_KEY, switchUser } from './me.js'
 import { closeServers, json, serve } from '../test-support/http-server.js'
 
 const user = { id: '7f3c2a8e-1b4d-4c6a-9e2f-0a1b2c3d4e5f', email: 'ana@example.com', createdAt: '2026-10-06T00:00:00.000Z' }
@@ -87,5 +87,32 @@ describe('switchUser', () => {
 
     expect(queryClient.getQueryData(['accounts'])).toBeUndefined()
     expect(queryClient.getQueryData(ME_QUERY_KEY)).toBeNull()
+  })
+})
+
+describe('forgetIfSignedOut (a page load got an error)', () => {
+  test('a 401 means the session ended: forgets the cache, stores null, and returns true', () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(['accounts'], [{ name: "Ana's wallet" }])
+    queryClient.setQueryData(ME_QUERY_KEY, { id: 'a', email: 'ana@example.com', createdAt: '' })
+
+    const signedOut = forgetIfSignedOut(queryClient, new ApiRequestError(401, 'unauthorized', 'Authentication required'))
+
+    expect(signedOut).toBe(true)
+    expect(queryClient.getQueryData(['accounts'])).toBeUndefined()
+    expect(queryClient.getQueryData(ME_QUERY_KEY)).toBeNull()
+  })
+
+  test.each([
+    ['a 500', new ApiRequestError(500, 'internal_error', 'Something went wrong')],
+    ['a 404', new ApiRequestError(404, 'not_found', 'Account not found')],
+    ['a network failure', new TypeError('fetch failed')],
+  ])('%s is not "signed out": returns false and keeps the cache', (_label, error) => {
+    const queryClient = new QueryClient()
+    const ana = { id: 'a', email: 'ana@example.com', createdAt: '' }
+    queryClient.setQueryData(ME_QUERY_KEY, ana)
+
+    expect(forgetIfSignedOut(queryClient, error)).toBe(false)
+    expect(queryClient.getQueryData(ME_QUERY_KEY)).toEqual(ana)
   })
 })

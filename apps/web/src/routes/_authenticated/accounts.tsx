@@ -1,17 +1,27 @@
 import type { Account, CreateAccountInput } from '@lab/schemas'
 import { accountResponseSchema } from '@lab/schemas'
 import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, redirect, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import type { UseFormSetError } from 'react-hook-form'
 import { AccountForm } from '../../components/account-form'
 import { describeAccountError } from '../../lib/account-errors'
 import { ACCOUNT_TYPE_LABELS } from '../../lib/account-types'
 import { accountsQuery, apiSend } from '../../lib/client'
-import { switchUser } from '../../lib/me'
+import { forgetIfSignedOut, switchUser } from '../../lib/me'
 
 export const Route = createFileRoute('/_authenticated/accounts')({
-  loader: ({ context }) => context.queryClient.ensureQueryData(accountsQuery),
+  // The guard trusts the cached user, so a session that ended since then shows up here as a 401.
+  loader: async ({ context, location }) => {
+    try {
+      return await context.queryClient.ensureQueryData(accountsQuery)
+    } catch (error) {
+      if (forgetIfSignedOut(context.queryClient, error)) {
+        throw redirect({ to: '/login', search: { redirect: location.href } })
+      }
+      throw error
+    }
+  },
   component: AccountsPage,
 })
 

@@ -28,3 +28,12 @@ export function switchUser(queryClient: QueryClient, user: CurrentUser): void {
   queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== ME_QUERY_KEY[0] })
   queryClient.setQueryData(ME_QUERY_KEY, user)
 }
+
+// For a page loader that got an error: a 401 means the session ended on the server (expired, or
+// logged out elsewhere) even though ['me'] is still cached. Forget everything and report true, so the
+// loader can redirect to /login. Any other error is left for the error screen.
+export function forgetIfSignedOut(queryClient: QueryClient, error: unknown): boolean {
+  if (!(error instanceof ApiRequestError) || error.status !== 401) return false
+  switchUser(queryClient, null)
+  return true
+}
