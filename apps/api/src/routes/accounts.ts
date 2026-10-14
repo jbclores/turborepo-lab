@@ -6,6 +6,7 @@ import {
   deleteAccount,
   getAccount,
   listAccounts,
+  ownsAccount,
   listTransactions,
   updateAccount,
   type AccountRow,
@@ -93,8 +94,7 @@ export function accountsRouter({ db }: { db: Db }) {
         notFound(res)
         return
       }
-      const withBalance = await getAccount(db, { userId: res.locals.user.id, id })
-      res.json({ account: toPublicAccount(account, withBalance?.balanceCents ?? 0) })
+      res.json({ account: toPublicAccount(account, account.balanceCents) })
     } catch (error) {
       if (!(error instanceof AccountNameTakenError)) throw error
       nameTaken(res)
@@ -120,7 +120,7 @@ export function accountsRouter({ db }: { db: Db }) {
     const userId = res.locals.user.id
     const id = uuidParam(req.params.id)
     // Checked first: for someone else's account an empty list would look like "no transactions yet".
-    if (!id || !(await getAccount(db, { userId, id }))) {
+    if (!id || !(await ownsAccount(db, { userId, id }))) {
       notFound(res)
       return
     }

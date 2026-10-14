@@ -154,6 +154,28 @@ describe('PATCH and DELETE /api/transactions/:id', () => {
     expect(transactionResponseSchema.parse(await res.json()).transaction.amountCents).toBe(5000)
   })
 
+  test.each([
+    ['a zero amount', { amountCents: 0 }],
+    ['an impossible date', { date: '2026-02-30' }],
+    ['a description of only spaces', { description: '   ' }],
+  ])('PATCH responds 400 for %s and changes nothing', async (_label, body) => {
+    const { ana, t } = await anaWithTransaction()
+
+    const res = await call('PATCH', `/transactions/${t.id}`, { cookie: ana.cookie, body })
+
+    expect(res.status).toBe(400)
+    expect(await allRows()).toEqual([expect.objectContaining({ amountCents: -100, date: '2026-10-14', description: 'x' })])
+  })
+
+  test('PATCH cannot move a transaction to another account: accountId in the body is ignored', async () => {
+    const { ana, t } = await anaWithTransaction()
+    const other = await createAccount(db, { userId: ana.user.id, name: 'Bank', type: 'checking' })
+
+    const res = await call('PATCH', `/transactions/${t.id}`, { cookie: ana.cookie, body: { amountCents: 5, accountId: other.id } })
+
+    expect(transactionResponseSchema.parse(await res.json()).transaction.accountId).toBe(ana.account.id)
+  })
+
   test('PATCH responds 400 for an empty change', async () => {
     const { ana, t } = await anaWithTransaction()
 

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from '@jest/globals'
-import { eq } from 'drizzle-orm'
-import { AccountHasTransactionsError, createAccount, deleteAccount, getAccount, listAccounts } from './account-repository.js'
+import { eq, sql } from 'drizzle-orm'
+import { AccountHasTransactionsError, createAccount, deleteAccount, getAccount, listAccounts, ownsAccount, updateAccount } from './account-repository.js'
 import { createDb } from './connection.js'
 import { migrateDatabase } from './migrate.js'
 import { accounts, transactions, users } from './schema.js'
@@ -233,5 +233,31 @@ describe('deleting', () => {
 
     expect(await db.select().from(accounts)).toHaveLength(0)
     expect(await db.select().from(transactions)).toHaveLength(0)
+  })
+})
+
+describe('review fixes', () => {
+  test('updateAccount answers with the balance, from the same statement', async () => {
+    const { user, account } = await userWithAccount('ana@example.com')
+    await add(user.id, account.id, 150000)
+
+    const updated = await updateAccount(db, { userId: user.id, id: account.id, name: 'Purse' })
+
+    expect(updated).toMatchObject({ name: 'Purse', balanceCents: 150000 })
+  })
+
+  test('ownsAccount is true only for your own existing account', async () => {
+    const ana = await userWithAccount('ana@example.com')
+    const ben = await userWithAccount('ben@example.com')
+
+    await expect(ownsAccount(db, { userId: ana.user.id, id: ana.account.id })).resolves.toBe(true)
+    await expect(ownsAccount(db, { userId: ben.user.id, id: ana.account.id })).resolves.toBe(false)
+    await expect(ownsAccount(db, { userId: ana.user.id, id: MISSING_ID })).resolves.toBe(false)
+  })
+
+  test('transactions.user_id has an index, so deleting a user does not scan the table', async () => {
+    const result = await db.execute(sql`select indexname from pg_indexes where tablename = 'transactions'`)
+
+    expect(result.rows.map((row) => row.indexname)).toContain('transactions_user_id_idx')
   })
 })

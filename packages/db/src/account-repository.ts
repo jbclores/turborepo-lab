@@ -66,17 +66,24 @@ export async function getAccount(db: Db, { userId, id }: { userId: string; id: s
 }
 
 // null when the account does not exist or belongs to someone else: the caller cannot tell which.
+// Returns the account with its balance, read in the same statement as the update, so a concurrent
+// delete cannot slip in between (null when missing or not this user's).
 export async function updateAccount(
   db: Db,
   { userId, id, name, type }: { userId: string; id: string; name?: string; type?: AccountRow['type'] },
-): Promise<AccountRow | null> {
+): Promise<AccountWithBalance | null> {
   if (name === undefined && type === undefined) throw new Error('Nothing to update')
   try {
     const [account] = await db
       .update(accounts)
       .set({ ...(name !== undefined && { name }), ...(type !== undefined && { type }) })
       .where(owned(userId, id))
-      .returning()
+      .returning({
+        ...getTableColumns(accounts),
+        // Written out by hand: in RETURNING, Drizzle prints columns without their table, and inside this
+        // subquery a bare "id" would mean transactions.id. The alias and "accounts"."id" make it unambiguous.
+        balanceCents: sql<number>`(select coalesce(sum(t.amount_cents), 0) from transactions t where t.account_id = "accounts"."id")`.mapWith(Number),
+      })
     return account ?? null
   } catch (error) {
     if (isNameUniqueViolation(error)) throw new AccountNameTakenError()
@@ -95,4 +102,10 @@ export async function deleteAccount(db: Db, { userId, id }: { userId: string; id
     }
     throw error
   }
+}
+
+// A cheap existence check (no balance): is this one of the user's accounts?
+export async function ownsAccount(db: Db, { userId, id }: { userId: string; id: string }): Promise<boolean> {
+  const [found] = await db.select({ id: accounts.id }).from(accounts).where(owned(userId, id))
+  return found !== undefined
 }

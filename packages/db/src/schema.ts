@@ -76,5 +76,7 @@ export const transactions = pgTable(
       sql`${table.description} = btrim(${table.description}) and char_length(${table.description}) between 1 and 100`,
     ),
     index('transactions_account_id_date_idx').on(table.accountId, table.date),
+    // Deleting a user cascades here by user_id; without an index that is a scan of every transaction.
+    index('transactions_user_id_idx').on(table.userId),
   ],
 )
