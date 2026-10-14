@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm'
-import { check, pgEnum, pgTable, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
+import { bigint, check, date, foreignKey, index, pgEnum, pgTable, text, timestamp, unique, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 
 export const users = pgTable('users', {
   id: uuid('id').primaryKey().defaultRandom(),
@@ -39,5 +39,42 @@ export const accounts = pgTable(
     uniqueIndex('accounts_user_id_lower_name_unique').on(table.userId, sql`lower(${table.name})`),
     // The same rule as the shared schema (trimmed, 1 to 50 characters), for callers that skip the API.
     check('accounts_name_trimmed_1_to_50', sql`${table.name} = btrim(${table.name}) and char_length(${table.name}) between 1 and 50`),
+    // Lets transactions reference (id, user_id) together, so a transaction can only point at its own user's account.
+    unique('accounts_id_user_id_unique').on(table.id, table.userId),
+  ],
+)
+
+export const transactions = pgTable(
+  'transactions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    accountId: uuid('account_id').notNull(),
+    // Integer cents, signed: +150000 is ₱1,500.00 in, -25050 is ₱250.50 out.
+    amountCents: bigint('amount_cents', { mode: 'number' }).notNull(),
+    // A calendar day, no time zone, read and written as 'YYYY-MM-DD'.
+    date: date('date', { mode: 'string' }).notNull(),
+    description: text('description').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // (account_id, user_id) must be one of this user's accounts: the database refuses anything else.
+    // ON DELETE NO ACTION (the default) blocks deleting an account that has transactions. The check sees the
+    // whole statement's cascades, so deleting a user (which cascades here and to accounts) still works.
+    // (RESTRICT would behave the same here: per the Postgres docs, the only difference is that NO ACTION
+    // can be deferred to the end of a transaction, and this constraint is not deferrable.)
+    foreignKey({
+      name: 'transactions_account_owned_fk',
+      columns: [table.accountId, table.userId],
+      foreignColumns: [accounts.id, accounts.userId],
+    }),
+    check('transactions_amount_nonzero_within_limit', sql`${table.amountCents} <> 0 and abs(${table.amountCents}) <= 99999999999`),
+    check(
+      'transactions_description_trimmed_1_to_100',
+      sql`${table.description} = btrim(${table.description}) and char_length(${table.description}) between 1 and 100`,
+    ),
+    index('transactions_account_id_date_idx').on(table.accountId, table.date),
   ],
 )

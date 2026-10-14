@@ -1,13 +1,22 @@
-import { and, asc, eq, sql } from 'drizzle-orm'
+import { and, asc, eq, getTableColumns, sql } from 'drizzle-orm'
 import type { Db } from './connection.js'
-import { accounts } from './schema.js'
+import { FOREIGN_KEY_VIOLATION, isConstraintViolation } from './postgres-error.js'
+import { accounts, transactions } from './schema.js'
 
 export type AccountRow = typeof accounts.$inferSelect
+export type AccountWithBalance = AccountRow & { balanceCents: number }
 
 export class AccountNameTakenError extends Error {
   constructor() {
     super('An account with this name already exists')
     this.name = 'AccountNameTakenError'
+  }
+}
+
+export class AccountHasTransactionsError extends Error {
+  constructor() {
+    super('This account has transactions')
+    this.name = 'AccountHasTransactionsError'
   }
 }
 
@@ -34,12 +43,26 @@ export async function createAccount(
   }
 }
 
-export async function listAccounts(db: Db, userId: string): Promise<AccountRow[]> {
-  return db
-    .select()
+// Summed on read, never stored, so it cannot drift. Postgres returns SUM(bigint) as numeric text;
+// mapWith(Number) is exact while a balance stays under 2^53 cents (about 90 trillion pesos).
+const balanceCents = sql<number>`coalesce(sum(${transactions.amountCents}), 0)`.mapWith(Number)
+
+const withBalance = (db: Db) =>
+  db
+    .select({ ...getTableColumns(accounts), balanceCents })
     .from(accounts)
+    .leftJoin(transactions, eq(transactions.accountId, accounts.id))
+
+export async function listAccounts(db: Db, userId: string): Promise<AccountWithBalance[]> {
+  return withBalance(db)
     .where(eq(accounts.userId, userId))
+    .groupBy(accounts.id)
     .orderBy(sql`lower(${accounts.name})`, asc(accounts.createdAt))
+}
+
+export async function getAccount(db: Db, { userId, id }: { userId: string; id: string }): Promise<AccountWithBalance | null> {
+  const [account] = await withBalance(db).where(owned(userId, id)).groupBy(accounts.id)
+  return account ?? null
 }
 
 // null when the account does not exist or belongs to someone else: the caller cannot tell which.
@@ -61,7 +84,15 @@ export async function updateAccount(
   }
 }
 
+// Refused by the database when the account has transactions (the ownership key has no ON DELETE action).
 export async function deleteAccount(db: Db, { userId, id }: { userId: string; id: string }): Promise<boolean> {
-  const deleted = await db.delete(accounts).where(owned(userId, id)).returning({ id: accounts.id })
-  return deleted.length > 0
+  try {
+    const deleted = await db.delete(accounts).where(owned(userId, id)).returning({ id: accounts.id })
+    return deleted.length > 0
+  } catch (error) {
+    if (isConstraintViolation(error, FOREIGN_KEY_VIOLATION, 'transactions_account_owned_fk')) {
+      throw new AccountHasTransactionsError()
+    }
+    throw error
+  }
 }
