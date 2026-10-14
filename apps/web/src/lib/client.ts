@@ -1,4 +1,4 @@
-import { accountsResponseSchema } from '@lab/schemas'
+import { accountResponseSchema, accountsResponseSchema, transactionsResponseSchema } from '@lab/schemas'
 import { queryOptions } from '@tanstack/react-query'
 import { createApiGet, createApiSend } from './api'
 import { createFetchMe, ME_QUERY_KEY } from './me'
@@ -22,3 +22,17 @@ export const accountsQuery = queryOptions({
   queryKey: ['accounts'],
   queryFn: ({ signal }) => apiGet('/api/accounts', accountsResponseSchema, signal).then(({ accounts }) => accounts),
 })
+
+// Keys nest under ['accounts'], so invalidating ['accounts'] refreshes the list, one account and its transactions.
+export const accountQuery = (id: string) =>
+  queryOptions({
+    queryKey: ['accounts', id],
+    queryFn: ({ signal }) => apiGet(`/api/accounts/${id}`, accountResponseSchema, signal).then(({ account }) => account),
+  })
+
+export const transactionsQuery = (accountId: string) =>
+  queryOptions({
+    queryKey: ['accounts', accountId, 'transactions'],
+    queryFn: ({ signal }) =>
+      apiGet(`/api/accounts/${accountId}/transactions`, transactionsResponseSchema, signal).then(({ transactions }) => transactions),
+  })
