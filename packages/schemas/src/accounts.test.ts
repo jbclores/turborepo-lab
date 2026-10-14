@@ -71,6 +71,7 @@ describe('accountSchema', () => {
     name: 'Wallet',
     type: 'cash',
     createdAt: '2026-10-13T10:00:00.000Z',
+    balanceCents: 0,
   }
 
   test('accepts the public shape', () => {

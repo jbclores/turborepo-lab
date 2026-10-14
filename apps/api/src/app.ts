@@ -5,6 +5,7 @@ import express, { Router, type NextFunction, type Request, type Response } from 
 import { requireAllowedOrigin } from './middleware/require-allowed-origin.js'
 import { accountsRouter } from './routes/accounts.js'
 import { authRouter } from './routes/auth.js'
+import { transactionsRouter } from './routes/transactions.js'
 
 type AppOptions = {
   webOrigin: string
@@ -51,6 +52,7 @@ export function createApp({
 
   api.use('/auth', authRouter({ db, passwordCost, sessionTtlMs, secureCookies }))
   api.use('/accounts', accountsRouter({ db }))
+  api.use('/transactions', transactionsRouter({ db }))
 
   app.use('/api', api)
 

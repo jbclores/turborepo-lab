@@ -23,6 +23,7 @@ export const accountSchema = z.strictObject({
   name: z.string(),
   type: accountTypeSchema,
   createdAt: z.iso.datetime(),
+  balanceCents: z.number().int(),
 })
 
 export const accountResponseSchema = z.object({ account: accountSchema })

@@ -194,7 +194,7 @@ describe('createApiSend: PATCH and DELETE', () => {
   })
 
   test('PATCH sends the JSON body and parses the response', async () => {
-    const account = { id: '7f3c2a8e-1b4d-4c6a-9e2f-0a1b2c3d4e5f', name: 'Purse', type: 'cash', createdAt: '2026-10-13T00:00:00.000Z' }
+    const account = { id: '7f3c2a8e-1b4d-4c6a-9e2f-0a1b2c3d4e5f', name: 'Purse', type: 'cash', createdAt: '2026-10-13T00:00:00.000Z', balanceCents: 0 }
     let body: string | undefined
     const baseUrl = await serve(async (req, res) => {
       body = await readBody(req)

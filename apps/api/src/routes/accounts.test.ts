@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from '@jest/globals'
-import { accounts, accountType, createAccount, createDb, createSession, createUser, migrateDatabase, users } from '@lab/db'
+import { accounts, accountType, createAccount, createDb, createSession, createTransaction, createUser, migrateDatabase, users } from '@lab/db'
 import { getTestDatabaseUrl, resetTestDatabase } from '@lab/db/testing'
 import { accountResponseSchema, accountsResponseSchema, ACCOUNT_TYPES, apiErrorSchema } from '@lab/schemas'
 import { createApp } from '../app.js'
@@ -237,4 +237,73 @@ test('the CORS preflight allows PATCH and DELETE with a JSON body from the web o
   expect(allowed).toContain('PATCH')
   expect(allowed).toContain('DELETE')
   expect(res.headers.get('access-control-allow-credentials')).toBe('true')
+})
+
+describe('balances and one account', () => {
+  test('the list carries each balance: the signed sum, 0 when empty', async () => {
+    const ana = await signIn('ana@example.com')
+    const wallet = await createAccount(db, { userId: ana.user.id, name: 'Wallet', type: 'cash' })
+    await createAccount(db, { userId: ana.user.id, name: 'Bank', type: 'checking' })
+    await createTransaction(db, { userId: ana.user.id, accountId: wallet.id, amountCents: 150000, date: '2026-10-14', description: 'Salary' })
+    await createTransaction(db, { userId: ana.user.id, accountId: wallet.id, amountCents: -25050, date: '2026-10-14', description: 'Groceries' })
+
+    const { accounts: list } = accountsResponseSchema.parse(await (await call('GET', '', { cookie: ana.cookie })).json())
+
+    expect(list.map((a) => [a.name, a.balanceCents])).toEqual([['Bank', 0], ['Wallet', 124950]])
+  })
+
+  test('GET /:id returns the account with its balance', async () => {
+    const ana = await signIn('ana@example.com')
+    const wallet = await createAccount(db, { userId: ana.user.id, name: 'Wallet', type: 'cash' })
+    await createTransaction(db, { userId: ana.user.id, accountId: wallet.id, amountCents: -100, date: '2026-10-14', description: 'x' })
+
+    const res = await call('GET', `/${wallet.id}`, { cookie: ana.cookie })
+
+    expect(res.status).toBe(200)
+    expect(accountResponseSchema.parse(await res.json()).account).toMatchObject({ name: 'Wallet', balanceCents: -100 })
+  })
+
+  test.each([
+    ['another user', true],
+    ['a missing id', false],
+  ])('GET /:id responds 404 for %s', async (_label, otherUser) => {
+    const ana = await signIn('ana@example.com')
+    const ben = await signIn('ben@example.com')
+    const wallet = await createAccount(db, { userId: ana.user.id, name: 'Wallet', type: 'cash' })
+
+    const res = await call('GET', `/${otherUser ? wallet.id : MISSING_ID}`, { cookie: ben.cookie })
+
+    expect(res.status).toBe(404)
+  })
+
+  test('GET /:id responds 404 for an id that is not a UUID', async () => {
+    const ana = await signIn('ana@example.com')
+
+    expect((await call('GET', '/abc', { cookie: ana.cookie })).status).toBe(404)
+  })
+
+  test('POST and PATCH answer with the balance too', async () => {
+    const ana = await signIn('ana@example.com')
+    const created = accountResponseSchema.parse(await (await call('POST', '', { cookie: ana.cookie, body: { name: 'Wallet', type: 'cash' } })).json()).account
+    await createTransaction(db, { userId: ana.user.id, accountId: created.id, amountCents: 500, date: '2026-10-14', description: 'x' })
+
+    const renamed = accountResponseSchema.parse(await (await call('PATCH', `/${created.id}`, { cookie: ana.cookie, body: { name: 'Purse' } })).json()).account
+
+    expect(created.balanceCents).toBe(0)
+    expect(renamed).toMatchObject({ name: 'Purse', balanceCents: 500 })
+  })
+
+  test('DELETE responds 409 account_has_transactions, and the account survives', async () => {
+    const ana = await signIn('ana@example.com')
+    const wallet = await createAccount(db, { userId: ana.user.id, name: 'Wallet', type: 'cash' })
+    await createTransaction(db, { userId: ana.user.id, accountId: wallet.id, amountCents: -100, date: '2026-10-14', description: 'x' })
+
+    const res = await call('DELETE', `/${wallet.id}`, { cookie: ana.cookie })
+
+    expect(res.status).toBe(409)
+    expect(apiErrorSchema.parse(await res.json())).toEqual({
+      error: { code: 'account_has_transactions', message: 'This account has transactions' },
+    })
+    expect(await rowOf(wallet.id)).toBeDefined()
+  })
 })
