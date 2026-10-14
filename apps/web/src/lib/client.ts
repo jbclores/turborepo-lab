@@ -1,3 +1,4 @@
+import { accountsResponseSchema } from '@lab/schemas'
 import { queryOptions } from '@tanstack/react-query'
 import { createApiGet, createApiSend } from './api'
 import { createFetchMe, ME_QUERY_KEY } from './me'
@@ -14,4 +15,10 @@ const fetchMe = createFetchMe(apiGet)
 export const meQuery = queryOptions({
   queryKey: ME_QUERY_KEY,
   queryFn: ({ signal }) => fetchMe(signal),
+})
+
+// This user's accounts. The accounts page invalidates it after every change, so it refetches.
+export const accountsQuery = queryOptions({
+  queryKey: ['accounts'],
+  queryFn: ({ signal }) => apiGet('/api/accounts', accountsResponseSchema, signal).then(({ accounts }) => accounts),
 })
