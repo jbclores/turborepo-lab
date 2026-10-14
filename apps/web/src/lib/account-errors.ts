@@ -24,3 +24,11 @@ export function describeTransactionError(error: unknown): AccountErrorOutcome {
   }
   return { field: 'root', message: 'Something went wrong. Please try again.' }
 }
+
+// Adding a transaction: a 404 there means the account itself is gone (deleted elsewhere), not a transaction.
+export function describeNewTransactionError(error: unknown): AccountErrorOutcome {
+  if (error instanceof ApiRequestError && error.code === 'not_found') {
+    return { notFound: true, message: 'This account no longer exists' }
+  }
+  return describeTransactionError(error)
+}

@@ -5,18 +5,26 @@ import type { FieldPath, FieldValues, UseFormSetError } from 'react-hook-form'
 import type { AccountErrorOutcome } from './account-errors'
 import { switchUser } from './me'
 
-type ChangeOptions<TValues extends FieldValues> = { setError?: UseFormSetError<TValues>; done?: () => void }
+type ChangeOptions<TValues extends FieldValues> = {
+  setError?: UseFormSetError<TValues>
+  done?: () => void
+  // What to do when the API says the thing no longer exists; defaults to `done`.
+  onNotFound?: () => void
+}
 
 // Runs a change, then refetches ['accounts'] (and everything under it) *before* reporting back, so a
 // closing form reveals the new data. `done` says what to close; nothing else on the page is touched.
-export function useChange<TValues extends FieldValues>(describe: (error: unknown) => AccountErrorOutcome) {
+export function useChange<TValues extends FieldValues>(defaultDescribe: (error: unknown) => AccountErrorOutcome) {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
   const [notice, setNotice] = useState<string | null>(null)
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['accounts'] })
 
-  async function change(run: () => Promise<unknown>, { setError, done }: ChangeOptions<TValues> = {}): Promise<boolean> {
+  async function change(
+    run: () => Promise<unknown>,
+    { setError, done, onNotFound, describe = defaultDescribe }: ChangeOptions<TValues> & { describe?: (error: unknown) => AccountErrorOutcome } = {},
+  ): Promise<boolean> {
     setNotice(null)
     try {
       await run()
@@ -31,7 +39,8 @@ export function useChange<TValues extends FieldValues>(describe: (error: unknown
         return false
       }
       if ('notFound' in outcome) {
-        done?.()
+        const whenGone = onNotFound ?? done
+        whenGone?.()
         setNotice(outcome.message)
       } else if (setError) {
         // The outcomes only name fields the calling form has ('name' on accounts, 'root' everywhere).

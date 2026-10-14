@@ -1,10 +1,10 @@
 import { formatCents, transactionResponseSchema, type Transaction } from '@lab/schemas'
 import { useSuspenseQuery } from '@tanstack/react-query'
-import { createFileRoute, Link } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
 import type { UseFormSetError } from 'react-hook-form'
 import { TransactionForm } from '../../../components/transaction-form'
-import { describeTransactionError } from '../../../lib/account-errors'
+import { describeNewTransactionError, describeTransactionError } from '../../../lib/account-errors'
 import { ACCOUNT_TYPE_LABELS } from '../../../lib/account-types'
 import { accountQuery, apiSend, transactionsQuery } from '../../../lib/client'
 import { loadOrRedirect } from '../../../lib/route-load'
@@ -40,9 +40,15 @@ function AccountPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [deletingId, setDeletingId] = useState<string | null>(null)
   const { change, notice } = useChange<TransactionFormValues>(describeTransactionError)
+  const navigate = useNavigate()
 
   const create = (values: TransactionFormValues, setError: UseFormSetError<TransactionFormValues>) =>
-    change(() => apiSend('POST', `/api/accounts/${accountId}/transactions`, toTransactionInput(values), transactionResponseSchema), { setError })
+    change(() => apiSend('POST', `/api/accounts/${accountId}/transactions`, toTransactionInput(values), transactionResponseSchema), {
+      setError,
+      describe: describeNewTransactionError,
+      // The account was deleted elsewhere: this page has nothing left to show.
+      onNotFound: () => void navigate({ to: '/accounts' }),
+    })
   const update = (id: string) => (values: TransactionFormValues, setError: UseFormSetError<TransactionFormValues>) =>
     change(() => apiSend('PATCH', `/api/transactions/${id}`, toTransactionInput(values), transactionResponseSchema), {
       setError,

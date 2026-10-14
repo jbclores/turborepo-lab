@@ -1,6 +1,6 @@
 import { describe, expect, test } from '@jest/globals'
 import { ApiRequestError } from './api.js'
-import { describeAccountError, describeTransactionError } from './account-errors.js'
+import { describeAccountError, describeNewTransactionError, describeTransactionError } from './account-errors.js'
 
 describe('describeAccountError', () => {
   test('a taken name goes on the name field', () => {
@@ -48,5 +48,19 @@ describe('describeTransactionError', () => {
 
   test('anything else is a generic message on the form', () => {
     expect(describeTransactionError(new ApiRequestError(500, 'internal_error', 'x'))).toEqual({ field: 'root', message: 'Something went wrong. Please try again.' })
+  })
+})
+
+describe('describeNewTransactionError (adding to an account)', () => {
+  test('a 404 means the account itself is gone, not a transaction', () => {
+    expect(describeNewTransactionError(new ApiRequestError(404, 'not_found', 'Account not found'))).toEqual({
+      notFound: true,
+      message: 'This account no longer exists',
+    })
+  })
+
+  test('a 401 means signed out, anything else is generic', () => {
+    expect(describeNewTransactionError(new ApiRequestError(401, 'unauthorized', 'x'))).toEqual({ signedOut: true })
+    expect(describeNewTransactionError(new TypeError('fetch failed'))).toEqual({ field: 'root', message: 'Something went wrong. Please try again.' })
   })
 })
