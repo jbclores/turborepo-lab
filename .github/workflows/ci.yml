@@ -62,6 +62,14 @@ jobs:
           restore-keys: |
             turbo-${{ runner.os }}-
 
+      # On a pull request, Turbo compares against the base branch by name (main), but the checkout only has
+      # origin/main; without a local main it warns and treats every file as changed.
+      - name: Make the base branch available to --affected
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git branch "$BASE_REF" "origin/$BASE_REF"
+
       - name: Typecheck, build and test the affected packages
         run: npx turbo run typecheck build test --affected
 
