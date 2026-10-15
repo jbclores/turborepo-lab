@@ -3,7 +3,8 @@
   "tasks": {
     "test": {
       "dependsOn": ["^build", "@lab/db#test"],
-      "cache": false
+      "cache": false,
+      "passThroughEnv": ["TEST_DATABASE_URL"]
     }
   }
 }
