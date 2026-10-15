@@ -1,15 +1,8 @@
-import { afterAll, beforeAll, describe, expect, test } from '@jest/globals'
+import { describe, expect, test } from '@jest/globals'
 import { todayLocal, toFormValues, toTransactionInput, transactionFormSchema } from './transaction-form.js'
 
+// These run in Asia/Manila (UTC+8, no daylight saving): apps/web/jest.config.js sets TZ for the workers.
 describe('todayLocal', () => {
-  const original = process.env.TZ
-  beforeAll(() => {
-    process.env.TZ = 'Asia/Manila' // UTC+8, no daylight saving
-  })
-  afterAll(() => {
-    process.env.TZ = original
-  })
-
   test('is the local calendar date, not the UTC one', () => {
     const lateUtc = new Date('2026-10-13T23:30:00Z') // 07:30 on the 14th in Manila
 
