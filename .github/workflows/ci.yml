@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A newer push to the same branch or pull request cancels the run still in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Typecheck, build, test, boundaries
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: lab
+          # Not a secret: this database exists only for the length of the job.
+          POSTGRES_PASSWORD: ci-only
+          # Created directly: a service container cannot run docker/postgres-init/.
+          POSTGRES_DB: lab_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U lab -d lab_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Passes the test guards (localhost, lab_test, no query string). Turbo hands it to the db and api
+      # test tasks through passThroughEnv in their turbo.json.
+      TEST_DATABASE_URL: postgres://lab:ci-only@localhost:5432/lab_test
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history: --affected compares with the base and falls back to running everything without it.
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      # No install scripts: none are needed (bcrypt loads its prebuilt binary; esbuild, SWC and Turbo get theirs
+      # from platform packages), and an old esbuild's postinstall failed here with ETXTBSY. Local npm 11.19 skips
+      # them too, through its install-scripts gate; the newer npm on GitHub ran them.
+      - run: npm ci --ignore-scripts
+
+      - name: Restore Turbo's cache
+        uses: actions/cache@v6
+        with:
+          path: .turbo/cache
+          key: turbo-${{ runner.os }}-${{ github.sha }}
+          restore-keys: |
+            turbo-${{ runner.os }}-
+
+      # On a pull request, Turbo compares against the base branch by name (main), but the checkout only has
+      # origin/main; without a local main it warns and treats every file as changed.
+      - name: Make the base branch available to --affected
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: git branch "$BASE_REF" "origin/$BASE_REF"
+
+      - name: Typecheck, build and test the affected packages
+        run: npx turbo run typecheck build test --affected
+
+      - name: Check package boundaries
+        run: npx turbo boundaries

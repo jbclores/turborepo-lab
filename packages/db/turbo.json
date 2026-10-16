@@ -3,7 +3,8 @@
   "tags": ["db"],
   "tasks": {
     "test": {
-      "cache": false
+      "cache": false,
+      "passThroughEnv": ["TEST_DATABASE_URL"]
     }
   }
 }
